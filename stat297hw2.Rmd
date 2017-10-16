@@ -1,0 +1,105 @@
+---
+title: "stat297hw2"
+author: "Dylan Shoemaker, Aaron Wilhelm"
+date: "October 16, 2017"
+output: html_document
+---
+
+```{r}
+#Fizz Buzz Problem
+array = c()
+
+for (i in 1:1000) {
+  if (i %% 3 == 0){
+    if (i %% 5 == 0){
+      q = "Fizz Buzz"
+      array[i] <- q
+    }else{
+      r = "Fizz"
+      array[i] <- r
+    }
+  }else if (i %% 5 == 0){
+    s = "Buzz"
+    array[i] <- s
+  }else{
+    array[i] <- i
+  }  
+}
+
+print(array)
+```
+
+```{r a, message=FALSE}
+#Map Problem
+library(maps)
+library(ggmap)
+library(rvest)
+
+big10 = read_html("http://www.bigten.org/library/stats/fb-confsked.html#standings")
+big10 %>%
+  html_nodes(".b1gfbstats:nth-child(9) td:nth-child(1) , .b1gfbstats:nth-child(6) td:nth-child(1)") %>%
+  html_text() -> uni_name
+uni_name = paste(uni_name, "University")
+uni_coord = data.frame(geocode(uni_name))
+big10 %>%
+  html_nodes("td:nth-child(7)") %>%
+  html_text() -> uni_wp
+uni_coord$wp = 100*as.numeric(uni_wp[1:length(uni_name)])
+uni_coord$conf = rep(c('East Division', 'West Division'), each = length(uni_name)/2)
+```
+```{r, results="hide"}
+uni_coord
+names(uni_coord)[names(uni_coord) == 'conf'] = 'Division'
+library(mapproj)
+states = map_data('state')
+conf_states = subset(states, region %in% c('south dakota', 'nebraska','kansas', 'minnesota', 'iowa', 'missouri', 'wisconsin', 'illinois', 'indiana', 'michigan', 'ohio', 'west virginia', 'pennsylvania', 'maryland', 'new jersey'))
+```
+```{r}
+conf_map = ggplot(data = conf_states) + geom_polygon(aes(x = long, y = lat, group = group), fill = 'light gray', color = 'black') + coord_fixed(1.3) + geom_point(data = uni_coord, aes(lon, lat, col = Division, size = wp)) + scale_size(name = 'Win rate [%]') + xlab('Longitude') + ylab('Latitude') + ggtitle('Big 10 Conference - as of 2017-10-10')
+conf_map
+```
+```{r eval=FALSE}
+#Stock Problem
+library(quantmod)
+library(rvest)
+sp500 = read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
+sp500 %>%
+  html_nodes(".text") %>%
+  html_text() -> ticker_sp500
+sp500_symbol = ticker_sp500[(1:499)*2+1]
+sp500_symbol[sp500_symbol == 'BRK.B'] = 'BRK-B'
+sp500_symbol[sp500_symbol == 'BF.B'] = 'BF-B'
+
+today = Sys.Date()
+three_years_ago = seq(today, length = 2, by = '-3 year')[2]
+getSymbols(sp500_symbol, from = three_years_ago, to = today)
+sp500_symbol
+
+num_tick = length(sp500_symbol)
+combos = combn(sp500_symbol, 2)
+exps = rep(NA, length(sp500_symbol))
+vars = rep(NA, length(sp500_symbol))
+for (i in 1:dim(combos)[2]){
+  Ra = na.omit(ClCl(get(combos[1,i])))
+  Rn = na.omit(ClCl(get(combos[2,i])))
+  
+  sigma = cov(cbind(Ra, Rn))
+  mu = c(mean(Ra), mean(Rn))
+  
+  omega_star = (sigma[2, 2] - sigma[1, 2])/(sigma[1, 1] + sigma[2, 2] - 2*sigma[1, 2])
+  
+  exps[i] = omega_star*mu[1] + (1 - omega_star)*mu[2]
+  vars[i] = omega_star^2*sigma[1,1] + (1-omega_star)^2*sigma[2,2] + 2*omega_star*(1-omega_star)*sigma[1,2]
+}
+
+exps = exps[!is.na(exps)]
+vars = vars[!is.na(vars)]
+sds = sds[!is.na(sds)]
+min_sds = sds>min(sds[!is.na(sds)])
+min_sds = min_sds[!is.na(min_sds)]
+min_sds = min_sds[!is.na(min_sds)]
+
+stock_data = data.frame(exps, sds, min_sds)
+
+ggplot(stock_data, aes(x=sds[!is.na(sds)], y=exps[!is.na(exps)])) + geom_point(alpha = 0.1, aes(col=min_sds)) + xlab('Investment Daily Risk') + ylab('Investment Daily Expected Rerturns') + annotate('point', x = min(sds), y = exps[!min_sds], col = 'red')
+```
